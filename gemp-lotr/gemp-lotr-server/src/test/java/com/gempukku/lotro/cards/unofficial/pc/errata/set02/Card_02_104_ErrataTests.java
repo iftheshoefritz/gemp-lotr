@@ -1,9 +1,8 @@
 package com.gempukku.lotro.cards.unofficial.pc.errata.set02;
 
-import com.gempukku.lotro.framework.VirtualTableScenario;
 import com.gempukku.lotro.common.*;
+import com.gempukku.lotro.framework.VirtualTableScenario;
 import com.gempukku.lotro.game.CardNotFoundException;
-import com.gempukku.lotro.game.PhysicalCardImpl;
 import com.gempukku.lotro.logic.decisions.DecisionResultInvalidException;
 import org.junit.Test;
 
@@ -33,7 +32,7 @@ public class Card_02_104_ErrataTests
 		/**
 		 * Set: 2
 		 * Name: Merry, Horticulturalist
-		 * Unique: True
+		 * Unique: true
 		 * Side: Free Peoples
 		 * Culture: Shire
 		 * Twilight Cost: 1
@@ -43,7 +42,7 @@ public class Card_02_104_ErrataTests
 		 * Vitality: 4
 		 * Resistance: 6
 		 * Signet: Gandalf
-		 * Game Text: <b>Fellowship:</b> Exert Merry to take a [shire] ally into hand from your draw deck (limit once per turn).
+		 * Game Text: <b>Fellowship:</b> Exert Merry to take a Hobbit ally into hand from your draw deck (limit once per turn).
 		*/
 
 		var scn = GetScenario();
@@ -72,10 +71,20 @@ public class Card_02_104_ErrataTests
 
 		var card = scn.GetFreepsCard("card");
 		scn.MoveCardsToHand(card);
+		//scn.MoveCompanionsToTable(card);
+		scn.MoveCardsToSupportArea(card);
+		scn.MoveCardsToDiscard(card);
+		scn.MoveCardsToTopOfDeck(card);
+
+		//var card = scn.GetShadowCard("card");
+		scn.MoveCardsToHand(card);
+		scn.MoveMinionsToTable(card);
+		scn.MoveCardsToSupportArea(card);
+		scn.MoveCardsToDiscard(card);
+		scn.MoveCardsToTopOfDeck(card);
 
 		scn.StartGame();
-		scn.FreepsPlayCard(card);
-
-		assertEquals(1, scn.GetTwilight());
+		
+		assertFalse(true);
 	}
 }
