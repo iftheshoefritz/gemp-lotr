@@ -159,6 +159,7 @@ public class BotService {
 
     private void runSelfPlayTrainingLoop(int generations, int gamesPerGeneration) {
         System.out.println("Starting self-play training loop for " + generations + " generations");
+        ZonedDateTime loopStart = DateUtils.Now();
 
         FotrStartersLearningStepsPersistence persistence = new FotrStartersLearningStepsPersistence();
 
@@ -168,30 +169,44 @@ public class BotService {
         });
 
         for (int generation = 0; generation <= generations; generation++) {
-            System.out.println("=== Generation " + generation + " ===");
+            System.out.println("\n=== Generation " + generation + " ===");
+            ZonedDateTime generationStart = DateUtils.Now();
 
             // Step 1: Run simulations with current model
+            ZonedDateTime simStart = DateUtils.Now();
             if (generation == 0) {
+                System.out.println("Running bootstrap games (Random vs Random)...");
                 startFotrStartersSimulation(
                         new RandomLearningBot(new FotrStartersRLGameStateFeatures(), "~randomBot1", replayBuffer),
                         new RandomLearningBot(new FotrStartersRLGameStateFeatures(), "~randomBot2", replayBuffer),
-                        1000);
+                        2000);
             } else {
+                System.out.println("Running exploration games (Trained vs Random, " + (gamesPerGeneration / 5) + " games)...");
+                ZonedDateTime explorationStart = DateUtils.Now();
                 startFotrStartersSimulation(
                         new FotrStarterBot(new FotrStartersRLGameStateFeatures(), "~trainBot" + generation, modelRegistry, replayBuffer),
                         new RandomLearningBot(new FotrStartersRLGameStateFeatures(), "~randomBot", replayBuffer),
                         gamesPerGeneration / 5
                 );
+                System.out.println("  Exploration phase: " + DateUtils.HumanDuration(Duration.between(explorationStart, DateUtils.Now())));
+
+                System.out.println("Running self-play games (Trained vs Trained, " + (gamesPerGeneration * 4 / 5) + " games)...");
+                ZonedDateTime selfPlayStart = DateUtils.Now();
                 startFotrStartersSimulation(
                         new FotrStarterBot(new FotrStartersRLGameStateFeatures(), "~trainBotOne" + generation, modelRegistry, replayBuffer),
                         new FotrStarterBot(new FotrStartersRLGameStateFeatures(), "~trainBotTwo" + generation, modelRegistry, replayBuffer),
                         gamesPerGeneration * 4 / 5
                 );
+                System.out.println("  Self-play phase: " + DateUtils.HumanDuration(Duration.between(selfPlayStart, DateUtils.Now())));
             }
+            System.out.println("Total simulation time: " + DateUtils.HumanDuration(Duration.between(simStart, DateUtils.Now())));
 
             // Step 2: Save data
+            System.out.println("\nPersisting " + replayBuffer.size() + " learning steps to disk...");
+            ZonedDateTime persistStart = DateUtils.Now();
             persistence.save(replayBuffer.sampleBatch(replayBuffer.size()));
             replayBuffer.clear();
+            System.out.println("Persistence time: " + DateUtils.HumanDuration(Duration.between(persistStart, DateUtils.Now())));
 
             // Step 3: Aggregate all historical data and retrain
             // List of all trainer instances
@@ -231,17 +246,60 @@ public class BotService {
                     new FpAssignmentTrainer()
             );
 
-            ZonedDateTime start = DateUtils.Now();
+            System.out.println("\nRetraining all models on accumulated data...");
+            ZonedDateTime retrainStart = DateUtils.Now();
+            long totalSteps = 0;
+            long totalLoadTime = 0;
+            long totalTrainTime = 0;
+            long totalSaveTime = 0;
+
             for (Trainer trainer : trainers) {
+                String trainerName = trainer.getClass().getSimpleName();
+
+                // Load data
+                ZonedDateTime loadStart = DateUtils.Now();
                 List<LearningStep> steps = persistence.load(trainer);
+                long loadMs = Duration.between(loadStart, DateUtils.Now()).toMillis();
+                totalLoadTime += loadMs;
+
+                // Train model
+                ZonedDateTime trainStart = DateUtils.Now();
                 SoftClassifier<double[]> model = trainer.train(steps);
+                long trainMs = Duration.between(trainStart, DateUtils.Now()).toMillis();
+                totalTrainTime += trainMs;
+
+                // Save model
+                ZonedDateTime saveStart = DateUtils.Now();
                 modelRegistry.registerModel(trainer.getClass(), model);
                 ModelIO.saveModel(trainer.getClass(), model);
+                long saveMs = Duration.between(saveStart, DateUtils.Now()).toMillis();
+                totalSaveTime += saveMs;
+
+                totalSteps += steps.size();
+
+                // Print detailed timing for trainers that take >500ms
+                long totalMs = loadMs + trainMs + saveMs;
+                if (totalMs > 500) {
+                    System.out.printf("  %-40s: %6d steps | load: %4dms | train: %5dms | save: %3dms | total: %5dms%n",
+                            trainerName, steps.size(), loadMs, trainMs, saveMs, totalMs);
+                }
             }
-            System.out.println("Training " + DateUtils.HumanDuration(Duration.between(DateUtils.Now(), start).abs()));
+
+            System.out.println("\nRetraining summary:");
+            System.out.println("  Total steps processed: " + totalSteps);
+            System.out.println("  Total load time:  " + DateUtils.HumanDuration(Duration.ofMillis(totalLoadTime)));
+            System.out.println("  Total train time: " + DateUtils.HumanDuration(Duration.ofMillis(totalTrainTime)));
+            System.out.println("  Total save time:  " + DateUtils.HumanDuration(Duration.ofMillis(totalSaveTime)));
+            System.out.println("  Total retraining: " + DateUtils.HumanDuration(Duration.between(retrainStart, DateUtils.Now())));
+
+            System.out.println("\n=== Generation " + generation + " Complete ===");
+            System.out.println("Generation total time: " + DateUtils.HumanDuration(Duration.between(generationStart, DateUtils.Now())));
         }
 
-        System.out.println("Self-play training loop complete.");
+        System.out.println("\n========================================");
+        System.out.println("Self-play training loop complete!");
+        System.out.println("Total time: " + DateUtils.HumanDuration(Duration.between(loopStart, DateUtils.Now())));
+        System.out.println("========================================");
     }
 
     public BotWithDeck getBotParticipant(LotroFormat lotroFormat) {
