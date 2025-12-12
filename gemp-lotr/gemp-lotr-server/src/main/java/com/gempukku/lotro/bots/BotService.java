@@ -22,7 +22,9 @@ import com.gempukku.lotro.bots.rl.fotrstarters.models.integerchoice.BurdenTraine
 import com.gempukku.lotro.bots.rl.fotrstarters.models.multiplechoice.AnotherMoveTrainer;
 import com.gempukku.lotro.bots.rl.fotrstarters.models.multiplechoice.GoFirstTrainer;
 import com.gempukku.lotro.bots.rl.fotrstarters.models.multiplechoice.MulliganTrainer;
+import com.gempukku.lotro.bots.simulation.BotFactory;
 import com.gempukku.lotro.bots.simulation.FotrStartersSimulation;
+import com.gempukku.lotro.bots.simulation.ParallelBatchSimulationRunner;
 import com.gempukku.lotro.bots.simulation.SimpleBatchSimulationRunner;
 import com.gempukku.lotro.bots.simulation.SimulationRunner;
 import com.gempukku.lotro.bots.simulation.SimulationStats;
@@ -41,9 +43,18 @@ import java.time.ZonedDateTime;
 import java.util.*;
 
 public class BotService {
-    private static final boolean START_OLD_BOT_SIMULATION_AT_STARTUP = false;
-    private static final boolean LOAD_MODELS_FROM_FILES = true;
-    private static final boolean START_NEW_BOT_SIMULATION_AT_STARTUP = true;
+    // training from scratch parameters
+    private static final boolean START_OLD_BOT_SIMULATION_AT_STARTUP = true;
+    private static final boolean LOAD_MODELS_FROM_FILES = false;
+    private static final boolean START_NEW_BOT_SIMULATION_AT_STARTUP = false;
+
+    // training is done let's play: NOTE: DON'T FORGET TO RECOMPILE!
+    //private static final boolean START_OLD_BOT_SIMULATION_AT_STARTUP = false;
+    //private static final boolean LOAD_MODELS_FROM_FILES = true;
+    //private static final boolean START_NEW_BOT_SIMULATION_AT_STARTUP = false;
+
+    private static final boolean USE_PARALLEL_SIMULATION = true;
+    private static final int PARALLEL_GAMES = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
 
     public static final String GENERAL_BOT_NAME = "~bot";
 
@@ -133,22 +144,37 @@ public class BotService {
         if (START_NEW_BOT_SIMULATION_AT_STARTUP) {
             System.out.println("Random vs Forge");
             startFotrStartersSimulation(
-                    new RandomDecisionBot("~randomBot"),
-                    new ForgeBot("~forgeBot", true),
+                    name -> new RandomDecisionBot(name),
+                    name -> new ForgeBot(name, true),
                     100);
 
             System.out.println("Old vs Forge");
             startFotrStartersSimulation(
-                    new FotrStarterBot(new FotrStartersRLGameStateFeatures(), "~oldBot", modelRegistry, null),
-                    new ForgeBot("~forgeBot", true),
+                    name -> new FotrStarterBot(new FotrStartersRLGameStateFeatures(), name, modelRegistry, null),
+                    name -> new ForgeBot(name, true),
                     100);
         }
     }
 
-    private void startFotrStartersSimulation(BotPlayer b1, BotPlayer b2, int games) {
+    private void startFotrStartersSimulation(BotFactory b1Factory, BotFactory b2Factory, int games) {
         System.out.println(games + " games simulation started");
-        SimulationRunner simulationRunner = new SimpleBatchSimulationRunner(
-                new FotrStartersSimulation(library, formatLibrary), b1, b2, games);
+
+        SimulationRunner simulationRunner;
+        if (USE_PARALLEL_SIMULATION) {
+            System.out.println("Using parallel simulation with " + PARALLEL_GAMES + " threads");
+            simulationRunner = new ParallelBatchSimulationRunner(
+                    new FotrStartersSimulation(library, formatLibrary),
+                    b1Factory,
+                    b2Factory,
+                    games,
+                    PARALLEL_GAMES);
+        } else {
+            System.out.println("Using sequential simulation");
+            BotPlayer bot1 = b1Factory.create("~bot1");
+            BotPlayer bot2 = b2Factory.create("~bot2");
+            simulationRunner = new SimpleBatchSimulationRunner(
+                    new FotrStartersSimulation(library, formatLibrary), bot1, bot2, games);
+        }
 
         ZonedDateTime start = DateUtils.Now();
         SimulationStats simulationStats = simulationRunner.run();
@@ -177,15 +203,15 @@ public class BotService {
             if (generation == 0) {
                 System.out.println("Running bootstrap games (Random vs Random)...");
                 startFotrStartersSimulation(
-                        new RandomLearningBot(new FotrStartersRLGameStateFeatures(), "~randomBot1", replayBuffer),
-                        new RandomLearningBot(new FotrStartersRLGameStateFeatures(), "~randomBot2", replayBuffer),
+                        name -> new RandomLearningBot(new FotrStartersRLGameStateFeatures(), name, replayBuffer),
+                        name -> new RandomLearningBot(new FotrStartersRLGameStateFeatures(), name, replayBuffer),
                         2000);
             } else {
                 System.out.println("Running exploration games (Trained vs Random, " + (gamesPerGeneration / 5) + " games)...");
                 ZonedDateTime explorationStart = DateUtils.Now();
                 startFotrStartersSimulation(
-                        new FotrStarterBot(new FotrStartersRLGameStateFeatures(), "~trainBot" + generation, modelRegistry, replayBuffer),
-                        new RandomLearningBot(new FotrStartersRLGameStateFeatures(), "~randomBot", replayBuffer),
+                        name -> new FotrStarterBot(new FotrStartersRLGameStateFeatures(), name, modelRegistry, replayBuffer),
+                        name -> new RandomLearningBot(new FotrStartersRLGameStateFeatures(), name, replayBuffer),
                         gamesPerGeneration / 5
                 );
                 System.out.println("  Exploration phase: " + DateUtils.HumanDuration(Duration.between(explorationStart, DateUtils.Now())));
@@ -193,8 +219,8 @@ public class BotService {
                 System.out.println("Running self-play games (Trained vs Trained, " + (gamesPerGeneration * 4 / 5) + " games)...");
                 ZonedDateTime selfPlayStart = DateUtils.Now();
                 startFotrStartersSimulation(
-                        new FotrStarterBot(new FotrStartersRLGameStateFeatures(), "~trainBotOne" + generation, modelRegistry, replayBuffer),
-                        new FotrStarterBot(new FotrStartersRLGameStateFeatures(), "~trainBotTwo" + generation, modelRegistry, replayBuffer),
+                        name -> new FotrStarterBot(new FotrStartersRLGameStateFeatures(), name, modelRegistry, replayBuffer),
+                        name -> new FotrStarterBot(new FotrStartersRLGameStateFeatures(), name, modelRegistry, replayBuffer),
                         gamesPerGeneration * 4 / 5
                 );
                 System.out.println("  Self-play phase: " + DateUtils.HumanDuration(Duration.between(selfPlayStart, DateUtils.Now())));

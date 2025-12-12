@@ -18,12 +18,10 @@ import java.util.concurrent.ThreadLocalRandom;
 public class FotrStartersSimulation implements Simulation {
     private final LotroCardBlueprintLibrary library;
     private final LotroFormatLibrary formatLibrary;
-    private final DefaultUserFeedback userFeedback;
 
     public FotrStartersSimulation(LotroCardBlueprintLibrary library, LotroFormatLibrary formatLibrary) {
         this.library = library;
         this.formatLibrary = formatLibrary;
-        this.userFeedback = new DefaultUserFeedback();
     }
 
 
@@ -32,6 +30,9 @@ public class FotrStartersSimulation implements Simulation {
         if (bot1.getName().equals(bot2.getName())) {
             throw new IllegalArgumentException("Bot names cannot be equal.");
         }
+
+        // Create fresh UserFeedback instance per game for thread safety
+        DefaultUserFeedback userFeedback = new DefaultUserFeedback();
 
         // Make starter decks
         LotroDeck aragornStarter = DeckSerialization.buildDeckFromContents("Aragorn Starter",
@@ -60,9 +61,9 @@ public class FotrStartersSimulation implements Simulation {
         // Simulate game loop
         while (!lotroGame.isFinished()) {
             if (userFeedback.getAwaitingDecision(bot1.getName()) != null) {
-                getDecisionAndDecide(bot1, bot2, lotroGame);
+                getDecisionAndDecide(bot1, bot2, lotroGame, userFeedback);
             } else if (userFeedback.getAwaitingDecision(bot2.getName()) != null) {
-                getDecisionAndDecide(bot2, bot1, lotroGame);
+                getDecisionAndDecide(bot2, bot1, lotroGame, userFeedback);
             }
         }
 
@@ -77,7 +78,8 @@ public class FotrStartersSimulation implements Simulation {
         }
     }
 
-    private void getDecisionAndDecide(BotPlayer bot, BotPlayer other, DefaultLotroGame lotroGame) {
+    private void getDecisionAndDecide(BotPlayer bot, BotPlayer other, DefaultLotroGame lotroGame,
+                                       DefaultUserFeedback userFeedback) {
         AwaitingDecision awaitingDecision = userFeedback.getAwaitingDecision(bot.getName());
         String action = bot.chooseAction(lotroGame, awaitingDecision);
         try {

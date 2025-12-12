@@ -20,6 +20,22 @@ public class SimulationStats {
         this.gameTimesMs = gameTimesMs;
     }
 
+    public int getBot1Wins() {
+        return bot1Wins;
+    }
+
+    public int getBot2Wins() {
+        return bot2Wins;
+    }
+
+    public int getTotalGames() {
+        return totalGames;
+    }
+
+    public List<Long> getGameTimesMs() {
+        return gameTimesMs;
+    }
+
     public double getBot1WinRate() {
         return bot1Wins * 100.0 / totalGames;
     }
