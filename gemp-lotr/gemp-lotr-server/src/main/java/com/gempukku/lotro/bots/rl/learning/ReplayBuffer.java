@@ -3,7 +3,7 @@ package com.gempukku.lotro.bots.rl.learning;
 import java.util.*;
 
 public class ReplayBuffer {
-    private final List<LearningStep> buffer = new ArrayList<>();
+    private final List<LearningStep> buffer = Collections.synchronizedList(new ArrayList<>());
     private final int capacity;
     private ReplayBufferListener listener;
     private int listenerThreshold;
@@ -24,12 +24,16 @@ public class ReplayBuffer {
         }
 
         // Notify listeners if threshold is met or exceeded
+        checkThreshold();
+    }
+
+    private synchronized void checkThreshold() {
         if (listener != null && buffer.size() > listenerThreshold) {
             listener.bufferReady(this);
         }
     }
 
-    public void addListener(int threshold, ReplayBufferListener listener) {
+    public synchronized void addListener(int threshold, ReplayBufferListener listener) {
         this.listener = listener;
         this.listenerThreshold = threshold;
     }
