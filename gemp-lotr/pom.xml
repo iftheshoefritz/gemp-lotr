@@ -36,6 +36,46 @@
                     <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
+
+            <!-- Utility commands for cleaning bot training artifacts -->
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <inherited>false</inherited>
+                <executions>
+                    <execution>
+                        <id>clean-models</id>
+                        <!-- No phase binding - only runs when explicitly invoked -->
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <delete>
+                                    <fileset dir="bot-models" includes="**/*.model"/>
+                                </delete>
+                                <echo message="Removed all .model files from bot-models/"/>
+                            </target>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>clean-training-data</id>
+                        <!-- No phase binding - only runs when explicitly invoked -->
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <delete>
+                                    <fileset dir="." includes="*.jsonl"/>
+                                </delete>
+                                <echo message="Removed all .jsonl training data files"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
     <repositories>

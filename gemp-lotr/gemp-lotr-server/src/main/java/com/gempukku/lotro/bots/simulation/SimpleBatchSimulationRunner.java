@@ -3,6 +3,9 @@ package com.gempukku.lotro.bots.simulation;
 import com.gempukku.lotro.bots.BotPlayer;
 import com.gempukku.lotro.bots.rl.learning.LearningBotPlayer;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class SimpleBatchSimulationRunner implements SimulationRunner{
     private final Simulation simulation;
     private final BotPlayer bot1;
@@ -19,9 +22,14 @@ public class SimpleBatchSimulationRunner implements SimulationRunner{
     @Override
     public SimulationStats run() {
         int bot1Wins = 0;
+        List<Long> gameTimesMs = new ArrayList<>();
 
         for (int i = 0; i < numGames; i++) {
+            long gameStartTime = System.currentTimeMillis();
             GameResult result = simulation.simulateGame(bot1, bot2);
+            long gameTime = System.currentTimeMillis() - gameStartTime;
+            gameTimesMs.add(gameTime);
+
             if (result == GameResult.P1_WON) {
                 bot1Wins++;
             }
@@ -35,6 +43,6 @@ public class SimpleBatchSimulationRunner implements SimulationRunner{
             }
         }
 
-        return new SimulationStats(bot1Wins, numGames - bot1Wins, numGames);
+        return new SimulationStats(bot1Wins, numGames - bot1Wins, numGames, gameTimesMs);
     }
 }
